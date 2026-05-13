@@ -7,7 +7,7 @@ sdk: gradio
 sdk_version: 6.14.0
 python_version: '3.11'
 app_file: app.py
-short_description: "Face verification AI demo using FaceNet, PyTorch and ChromaDB"
+short_description: "Face verification demo with FaceNet and VectorDB"
 pinned: false
 license: mit
 ---
