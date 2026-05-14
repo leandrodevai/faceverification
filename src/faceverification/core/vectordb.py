@@ -7,7 +7,8 @@ filtering.
 """
 
 import uuid
-from typing import Any, Mapping
+from collections.abc import Mapping
+from typing import Any
 
 import chromadb
 import numpy as np
@@ -105,8 +106,7 @@ class VectorDB:
         embeddings = result.get("embeddings")
         if not embeddings or embeddings[0] is None or len(embeddings[0]) == 0:
             raise ValueError(
-                "No record found in the vector database. "
-                "Add a person before verifying faces."
+                "No record found in the vector database. Add a person before verifying faces."
             )
 
         best_dist = 100000

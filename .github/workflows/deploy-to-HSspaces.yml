@@ -1,20 +1,34 @@
 name: Deploy to Hugging Face Space
 
 on:
-  push:
-    branches: [main]
+  workflow_run:
+    workflows: ["Quality Checks"]
+    types:
+      - completed
+    branches:
+      - main
   workflow_dispatch:
 
 jobs:
-  sync:
+  deploy:
+    name: Sync Space
+    if: ${{ github.event_name == 'workflow_dispatch' || github.event.workflow_run.conclusion == 'success' }}
     runs-on: ubuntu-latest
+    permissions:
+      contents: read
+    concurrency:
+      group: hugging-face-space-deploy
+      cancel-in-progress: true
 
     steps:
-      - uses: actions/checkout@v6
+      - name: Checkout
+        uses: actions/checkout@v6
         with:
+          ref: ${{ github.event.workflow_run.head_sha || github.ref }}
           lfs: true
 
-      - uses: huggingface/hub-sync@v0.1.0
+      - name: Sync to Hugging Face Space
+        uses: huggingface/hub-sync@v0.1.0
         with:
           github_repo_id: ${{ github.repository }}
           huggingface_repo_id: ${{ vars.HF_SPACE_ID }}

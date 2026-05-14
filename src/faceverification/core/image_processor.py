@@ -62,9 +62,7 @@ class ImageProcessor:
             device=self.device,
             thresholds=list(mtcnn_thresholds),
         )
-        self.facenet = (
-            InceptionResnetV1(pretrained=facenet_pretrained).eval().to(self.device)
-        )
+        self.facenet = InceptionResnetV1(pretrained=facenet_pretrained).eval().to(self.device)
 
     def get_embedding(self, image: Image.Image) -> torch.Tensor:
         """Return a normalized embedding for the detected face in an image.
@@ -82,9 +80,9 @@ class ImageProcessor:
         if face_tensor is None:
             raise FaceNotDetectedError("No face detected in the image.")
 
-        face_tensor = (
-            face_tensor.unsqueeze(0) if face_tensor.ndim == 3 else face_tensor
-        ).to(self.device)
+        face_tensor = (face_tensor.unsqueeze(0) if face_tensor.ndim == 3 else face_tensor).to(
+            self.device
+        )
 
         with torch.no_grad():
             features = self.facenet(face_tensor)
@@ -108,7 +106,7 @@ class ImageProcessor:
             return image, False
 
         draw = ImageDraw.Draw(image)
-        for box, prob in zip(boxes, probs):
+        for box, prob in zip(boxes, probs, strict=True):
             x1, y1, x2, y2 = [int(v) for v in box]
             draw.rectangle([x1, y1, x2, y2], outline="red", width=2)
             draw.text((x1, max(0, y1 - 12)), f"{prob:.4f}", fill="red")

@@ -31,12 +31,8 @@ with gr.Blocks() as FV_gr:
     with gr.Tabs():
         with gr.TabItem("Add Person"):
             with gr.Row():
-                input_image = gr.Image(
-                    label="Upload an image with a clear face", type="pil"
-                )
-                input_name = gr.Textbox(
-                    label="Person name", placeholder="Example: John Doe"
-                )
+                input_image = gr.Image(label="Upload an image with a clear face", type="pil")
+                input_name = gr.Textbox(label="Person name", placeholder="Example: John Doe")
             output_image = gr.Image(label="Detection result")
             submit_btn = gr.Button("Add to database")
             submit_btn.click(
