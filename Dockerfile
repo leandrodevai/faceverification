@@ -6,6 +6,9 @@ ENV PYTHONDONTWRITEBYTECODE=1 \
     PYTHONPATH=/app/src \
     FACEVERIFICATION_DEVICE=cpu
 
+ARG APP_VARIANT=gradio
+ENV APP_VARIANT=${APP_VARIANT}
+
 WORKDIR /app
 
 RUN apt-get update && apt-get install -y --no-install-recommends \
@@ -28,4 +31,8 @@ USER appuser
 
 EXPOSE 8000 7860
 
-CMD ["uvicorn", "faceverification.interfaces.fastapi_app:app", "--host", "0.0.0.0", "--port", "8000"]
+CMD if [ "$APP_VARIANT" = "fastapi" ]; then \
+        exec uvicorn faceverification.interfaces.fastapi_app:app --host 0.0.0.0 --port 8000; \
+    else \
+        exec python -m faceverification.interfaces.gradio_app; \
+    fi

@@ -2,7 +2,7 @@ name: Deploy to Hugging Face Space
 
 on:
   workflow_run:
-    workflows: ["Quality Checks"]
+    workflows: ["Container Build, Scan, and Publish"]
     types:
       - completed
     branches:
@@ -34,4 +34,4 @@ jobs:
           huggingface_repo_id: ${{ vars.HF_SPACE_ID }}
           hf_token: ${{ secrets.HF_TOKEN }}
           repo_type: space
-          space_sdk: gradio
+          space_sdk: docker

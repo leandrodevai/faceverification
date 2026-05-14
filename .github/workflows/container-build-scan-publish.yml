@@ -11,7 +11,8 @@ on:
 
 env:
   IMAGE_NAME: ghcr.io/${{ github.repository }}
-  IMAGE_SCAN_TAG: faceverification:${{ github.sha }}
+  FASTAPI_SCAN_TAG: faceverification-fastapi:${{ github.sha }}
+  GRADIO_SCAN_TAG: faceverification-gradio:${{ github.sha }}
 
 jobs:
   docker:
@@ -41,27 +42,27 @@ jobs:
         with:
           images: ${{ env.IMAGE_NAME }}
           tags: |
-            type=ref,event=branch
-            type=ref,event=pr
-            type=sha
-            type=raw,value=latest,enable={{is_default_branch}}
+            type=sha,prefix=fastapi-sha-
+            type=raw,value=fastapi,enable={{is_default_branch}}
 
-      - name: Build image for scan
+      - name: Build FastAPI image for scan
         uses: docker/build-push-action@v6
         with:
           context: .
+          build-args: |
+            APP_VARIANT=fastapi
           load: true
-          tags: ${{ env.IMAGE_SCAN_TAG }}
+          tags: ${{ env.FASTAPI_SCAN_TAG }}
           labels: ${{ steps.meta.outputs.labels }}
           cache-from: type=gha
           cache-to: type=gha,mode=max
 
-      - name: Scan image for blocking vulnerabilities
-        id: trivy_gate
+      - name: Scan FastAPI image for blocking vulnerabilities
+        id: trivy_fastapi_gate
         continue-on-error: true
         uses: aquasecurity/trivy-action@v0.36.0
         with:
-          image-ref: ${{ env.IMAGE_SCAN_TAG }}
+          image-ref: ${{ env.FASTAPI_SCAN_TAG }}
           format: table
           severity: HIGH,CRITICAL
           vuln-type: os,library
@@ -69,13 +70,13 @@ jobs:
           ignore-unfixed: true
           exit-code: "1"
 
-      - name: Generate Trivy SARIF report
+      - name: Generate FastAPI Trivy SARIF report
         if: always()
         uses: aquasecurity/trivy-action@v0.36.0
         with:
-          image-ref: ${{ env.IMAGE_SCAN_TAG }}
+          image-ref: ${{ env.FASTAPI_SCAN_TAG }}
           format: sarif
-          output: trivy-results.sarif
+          output: trivy-fastapi-results.sarif
           severity: HIGH,CRITICAL
           vuln-type: os,library
           scanners: vuln
@@ -83,14 +84,60 @@ jobs:
           limit-severities-for-sarif: true
           exit-code: "0"
 
-      - name: Upload Trivy scan results
+      - name: Upload FastAPI Trivy scan results
         if: always()
         uses: github/codeql-action/upload-sarif@v4
         with:
-          sarif_file: trivy-results.sarif
+          sarif_file: trivy-fastapi-results.sarif
+          category: trivy-fastapi
+
+      - name: Build Gradio image for scan
+        uses: docker/build-push-action@v6
+        with:
+          context: .
+          build-args: |
+            APP_VARIANT=gradio
+          load: true
+          tags: ${{ env.GRADIO_SCAN_TAG }}
+          labels: ${{ steps.meta.outputs.labels }}
+          cache-from: type=gha
+
+      - name: Scan Gradio image for blocking vulnerabilities
+        id: trivy_gradio_gate
+        continue-on-error: true
+        uses: aquasecurity/trivy-action@v0.36.0
+        with:
+          image-ref: ${{ env.GRADIO_SCAN_TAG }}
+          format: table
+          severity: HIGH,CRITICAL
+          vuln-type: os,library
+          scanners: vuln
+          ignore-unfixed: true
+          exit-code: "1"
+
+      - name: Generate Gradio Trivy SARIF report
+        if: always()
+        uses: aquasecurity/trivy-action@v0.36.0
+        with:
+          image-ref: ${{ env.GRADIO_SCAN_TAG }}
+          format: sarif
+          output: trivy-gradio-results.sarif
+          severity: HIGH,CRITICAL
+          vuln-type: os,library
+          scanners: vuln
+          ignore-unfixed: true
+          limit-severities-for-sarif: true
+          exit-code: "0"
+
+      - name: Upload Gradio Trivy scan results
+        if: always()
+        uses: github/codeql-action/upload-sarif@v4
+        with:
+          sarif_file: trivy-gradio-results.sarif
+          category: trivy-gradio
 
       - name: Fail on blocking vulnerabilities
-        if: steps.trivy_gate.outcome == 'failure'
+        if: steps.trivy_fastapi_gate.outcome == 'failure' || steps.trivy_gradio_gate.outcome == 'failure'
         run: exit 1
 
       - name: Log in to GitHub Container Registry
@@ -98,12 +145,14 @@ jobs:
         with:
           registry: ghcr.io
           username: ${{ github.actor }}
-          password: ${{ github.token }}
+          password: ${{ secrets.GITHUB_TOKEN }}
 
       - name: Push image
         uses: docker/build-push-action@v6
         with:
           context: .
+          build-args: |
+            APP_VARIANT=fastapi
           push: true
           tags: ${{ steps.meta.outputs.tags }}
           labels: ${{ steps.meta.outputs.labels }}

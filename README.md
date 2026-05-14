@@ -3,10 +3,8 @@ title: Face Verification
 emoji: 🧠
 colorFrom: blue
 colorTo: green
-sdk: gradio
-sdk_version: 6.14.0
-python_version: '3.11'
-app_file: app.py
+sdk: docker
+app_port: 7860
 short_description: "Face verification demo with FaceNet and VectorDB"
 tags: ["face-verification", "computer-vision", "facenet", "vector-database"]
 pinned: false
@@ -30,7 +28,8 @@ The app lets users add known people to a local embeddings database and verify wh
 - FaceNet embedding extraction with PyTorch
 - Similarity search with ChromaDB
 - Interactive Gradio UI with add-person and verify-identity flows
-- Hugging Face Spaces deployment-ready structure
+- FastAPI interface for containerized API deployments
+- Docker-based Hugging Face Space deployment
 
 ## Tech Stack
 
@@ -38,8 +37,10 @@ The app lets users add known people to a local embeddings database and verify wh
 - PyTorch
 - FaceNet / facenet-pytorch
 - ChromaDB
+- FastAPI
 - Gradio
-- Hugging Face Spaces
+- Docker / GHCR
+- Hugging Face Spaces Docker SDK
 
 ## Run Locally
 
@@ -59,7 +60,7 @@ python app.py
 
 ## FastAPI Interface
 
-The project also includes an HTTP API for the same enroll-and-verify workflow.
+The project includes an HTTP API for the same enroll-and-verify workflow.
 Run it locally with:
 
 ```bash
@@ -98,8 +99,8 @@ Authorization: Bearer <access_token>
 
 ## Deployment Notes
 
-For a containerized deployment, the recommended baseline is the FastAPI
-container running Uvicorn:
+For API deployments, the recommended baseline is the FastAPI container running
+Uvicorn:
 
 ```bash
 uvicorn faceverification.interfaces.fastapi_app:app --host 0.0.0.0 --port 8000
@@ -143,7 +144,21 @@ docker compose --profile gradio up --build
 
 The Gradio UI will be available at http://localhost:7860.
 
-Both services use the same image. By default, ChromaDB runs in memory, so
+Both services are built from the same `Dockerfile` with different variants:
+
+- `fastapi`: published to GHCR by the container workflow.
+- `gradio`: used by the Hugging Face Docker Space.
+
+The published FastAPI image is tagged as:
+
+```text
+ghcr.io/leandrodevai/faceverification:fastapi
+```
+
+Each successful container workflow also publishes an immutable SHA tag with the
+`fastapi-sha-*` prefix.
+
+By default, ChromaDB runs in memory, so
 enrolled faces are ephemeral and disappear when the container restarts. This is
 intentional for the demo baseline.
 
@@ -199,11 +214,13 @@ curl -X POST http://localhost:8000/verify \
 
 ```text
 src/faceverification/
-  app.py
   config.py
   core/
     image_processor.py
     vectordb.py
+  interfaces/
+    fastapi_app.py
+    gradio_app.py
   services/
     face_verification.py
 ```
