@@ -14,6 +14,7 @@ RUN apt-get update && apt-get install -y --no-install-recommends \
     && rm -rf /var/lib/apt/lists/*
 
 COPY requirements.txt .
+RUN pip install --no-cache-dir --upgrade pip setuptools "wheel>=0.46.2"
 RUN pip install --no-cache-dir -r requirements.txt
 
 COPY pyproject.toml README.md ./
