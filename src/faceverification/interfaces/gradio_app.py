@@ -54,7 +54,7 @@ with gr.Blocks() as FV_gr:
 
 
 def main():
-    FV_gr.launch()
+    FV_gr.launch(server_name="0.0.0.0", server_port=7860)
 
 
 if __name__ == "__main__":

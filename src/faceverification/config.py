@@ -14,6 +14,12 @@ class Settings(BaseSettings):
     mtcnn_thresholds: tuple[float, float, float] = (0.6, 0.7, 0.95)
     facenet_pretrained: str = "vggface2"
 
+    demo_username: str = "demo"
+    demo_password: str = "demo123"
+    jwt_secret_key: str = "change-me-in-production-demo-secret-32-bytes-min"
+    jwt_algorithm: str = "HS256"
+    jwt_access_token_expire_minutes: int = 60
+
     model_config = SettingsConfigDict(
         env_file=".env",
         env_prefix="FACEVERIFICATION_",

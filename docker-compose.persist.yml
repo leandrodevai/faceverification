@@ -1,0 +1,15 @@
+services:
+  api:
+    environment:
+      FACEVERIFICATION_VECTOR_DB_PERSIST_DIRECTORY: ${FACEVERIFICATION_VECTOR_DB_NAME:+/data/chroma/${FACEVERIFICATION_VECTOR_DB_NAME}}
+    volumes:
+      - faceverification-data:/data
+
+  gradio:
+    environment:
+      FACEVERIFICATION_VECTOR_DB_PERSIST_DIRECTORY: ${FACEVERIFICATION_VECTOR_DB_NAME:+/data/chroma/${FACEVERIFICATION_VECTOR_DB_NAME}}
+    volumes:
+      - faceverification-data:/data
+
+volumes:
+  faceverification-data:
