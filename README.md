@@ -13,6 +13,7 @@ pinned: false
 license: mit
 ---
 ![CI](https://github.com/leandrodevai/faceverification/actions/workflows/ci.yml/badge.svg)
+![Container Security](https://github.com/leandrodevai/faceverification/actions/workflows/container-build-scan-publish.yml/badge.svg)
 ![Deploy](https://github.com/leandrodevai/faceverification/actions/workflows/deploy-to-HSspaces.yml/badge.svg)
 
 # Face Verification
