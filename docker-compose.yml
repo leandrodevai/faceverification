@@ -2,7 +2,7 @@ services:
   api:
     build:
       context: .
-    image: faceverification:local
+    image: faceverification
     command: uvicorn faceverification.interfaces.fastapi_app:app --host 0.0.0.0 --port 8000
     ports:
       - "8000:8000"
@@ -12,13 +12,7 @@ services:
       FACEVERIFICATION_DEMO_PASSWORD: ${FACEVERIFICATION_DEMO_PASSWORD:-demo123}
       FACEVERIFICATION_JWT_SECRET_KEY: ${FACEVERIFICATION_JWT_SECRET_KEY:-change-me-in-production-demo-secret-32-bytes-min}
     healthcheck:
-      test:
-        [
-          "CMD",
-          "python",
-          "-c",
-          "import urllib.request; urllib.request.urlopen('http://127.0.0.1:8000/health', timeout=5)",
-        ]
+      test: [ "CMD", "python", "-c", "import urllib.request; urllib.request.urlopen('http://127.0.0.1:8000/health', timeout=5)" ]
       interval: 30s
       timeout: 10s
       retries: 3
@@ -27,7 +21,7 @@ services:
   gradio:
     build:
       context: .
-    image: faceverification:local
+    image: faceverification
     command: python -m faceverification.interfaces.gradio_app
     profiles:
       - gradio

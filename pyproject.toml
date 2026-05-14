@@ -3,7 +3,7 @@ name = "faceverification"
 version = "0.1.0"
 description = "Face verification demo using FaceNet embeddings, ChromaDB vector search, and CI/CD pipeline."
 readme = "README.md"
-requires-python = ">=3.11"
+requires-python = ">=3.11,<3.14"
 dependencies = [
     "numpy>=1.24,<2.0",
     "datasets>=4.8.5",
@@ -12,8 +12,6 @@ dependencies = [
     "huggingface-hub>=1.14.0",
     "python-dotenv>=1.2.2",
     "pydantic-settings>=2.14.1",
-    "torch>=2.11.0",
-    "torchvision>=0.26.0",
     "chromadb>=1.5.9",
     "pytest>=9.0.3",
     "pytest-cov>=7.1.0",
@@ -22,6 +20,8 @@ dependencies = [
     "python-multipart>=0.0.28",
     "uvicorn[standard]>=0.46.0",
     "ruff>=0.15.13",
+    "torch>=2.12.0",
+    "torchvision>=0.27.0",
 ]
 
 [project.scripts]
@@ -33,6 +33,15 @@ build-backend = "setuptools.build_meta"
 
 [tool.setuptools.packages.find]
 where = ["src"]
+
+[tool.uv.sources]
+torch = { index = "pytorch-cpu" }
+torchvision = { index = "pytorch-cpu" }
+
+[[tool.uv.index]]
+name = "pytorch-cpu"
+url = "https://download.pytorch.org/whl/cpu"
+explicit = true
 
 [tool.pytest.ini_options]
 pythonpath = ["src"]

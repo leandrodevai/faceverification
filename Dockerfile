@@ -16,7 +16,7 @@ RUN apt-get update && apt-get install -y --no-install-recommends \
 COPY requirements.txt .
 RUN pip install --no-cache-dir -r requirements.txt
 
-COPY app.py pyproject.toml README.md ./
+COPY pyproject.toml README.md ./
 COPY src ./src
 
 RUN useradd --create-home --shell /usr/sbin/nologin appuser \
