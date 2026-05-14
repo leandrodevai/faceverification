@@ -1,7 +1,7 @@
 [project]
 name = "faceverification"
 version = "0.1.0"
-description = "Add your description here"
+description = "Face verification demo using FaceNet embeddings, ChromaDB vector search, and CI/CD pipeline."
 readme = "README.md"
 requires-python = ">=3.11"
 dependencies = [
@@ -16,10 +16,14 @@ dependencies = [
     "torchvision>=0.26.0",
     "chromadb>=1.5.9",
     "pytest>=9.0.3",
+    "pytest-cov>=7.1.0",
+    "fastapi>=0.136.1",
+    "uvicorn[standard]>=0.46.0",
+    "ruff>=0.15.13",
 ]
 
 [project.scripts]
-faceverification = "faceverification.app:main"
+faceverification = "faceverification.interfaces.gradio_app:main"
 
 [build-system]
 requires = ["setuptools>=68"]
@@ -45,3 +49,12 @@ markers = [
     "integration: tests that use real external components or models",
     "e2e: end-to-end tests that exercise complete application workflows",
 ]
+
+[tool.ruff]
+line-length = 100
+target-version = "py311"
+src = ["src", "test"]
+
+[tool.ruff.lint]
+select = ["E", "F", "I", "B", "UP", "SIM"]
+

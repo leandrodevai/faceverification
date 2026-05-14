@@ -8,13 +8,18 @@ sdk_version: 6.14.0
 python_version: '3.11'
 app_file: app.py
 short_description: "Face verification demo with FaceNet and VectorDB"
+tags: ["face-verification", "computer-vision", "facenet", "vector-database"]
 pinned: false
 license: mit
 ---
+![CI](https://github.com/leandrodevai/faceverification/actions/workflows/ci.yml/badge.svg)
+![Deploy](https://github.com/leandrodevai/faceverification/actions/workflows/deploy-to-HSspaces.yml/badge.svg)
 
 # Face Verification
 
 AI Engineering Demo project demonstrating an end-to-end face verification workflow with FaceNet embeddings, ChromaDB vector search, and an interactive Gradio interface.
+
+Try it on Hugging Face Spaces: https://huggingface.co/spaces/leandrodevai/faceverification
 
 The app lets users add known people to a local embeddings database and verify whether a new face image matches one of the stored identities.
 
