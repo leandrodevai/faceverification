@@ -5,47 +5,160 @@ from faceverification.core.image_processor import FaceNotDetectedError
 from faceverification.services.face_verification import add_person, verify_person
 
 
-def add_person_ui(image: Image.Image, name: str) -> Image.Image:
+def add_person_ui(image: Image.Image | None, name: str) -> Image.Image:
     try:
-        return add_person(image, name)
+        if image is None:
+            raise gr.Error("Upload an image before adding a person.")
+        if not name or not name.strip():
+            raise gr.Error("Enter a name before adding the person.")
+
+        return add_person(image, name.strip())
     except FaceNotDetectedError as exc:
         raise gr.Error(str(exc)) from exc
     except Exception as exc:
         raise gr.Error(str(exc)) from exc
 
 
-def verify_person_ui(image: Image.Image) -> tuple[str, Image.Image]:
+def verify_person_ui(image: Image.Image | None) -> tuple[str, Image.Image]:
     try:
-        return verify_person(image)
+        if image is None:
+            raise gr.Error("Upload an image before verifying an identity.")
+
+        name, annotated_image = verify_person(image)
+        return f"Result: {name}", annotated_image
     except FaceNotDetectedError as exc:
         raise gr.Error(str(exc)) from exc
     except Exception as exc:
         raise gr.Error(str(exc)) from exc
 
 
-with gr.Blocks() as FV_gr:
-    gr.Markdown(
-        "# Face Verification Tool\n"
-        "Upload an image and assign a name to add it to the embeddings database."
+APP_CSS = """
+.app-shell {
+    max-width: 1040px;
+    margin: 0 auto;
+}
+
+.hero {
+    padding: 18px 2px 8px;
+}
+
+.hero h1 {
+    margin-bottom: 8px;
+}
+
+.hero p {
+    max-width: 760px;
+    color: var(--body-text-color-subdued);
+    font-size: 1rem;
+}
+
+.hint {
+    color: var(--body-text-color-subdued);
+    font-size: 0.94rem;
+    line-height: 1.5;
+}
+
+.result-box textarea {
+    font-size: 1.15rem !important;
+    font-weight: 650 !important;
+}
+
+.primary-action {
+    margin-top: 8px;
+}
+"""
+
+APP_THEME = gr.themes.Soft(primary_hue="blue", secondary_hue="green")
+
+
+with (
+    gr.Blocks(
+        title="Face Verification Demo",
+    ) as FV_gr,
+    gr.Column(elem_classes="app-shell"),
+):
+    gr.HTML(
+        """
+<div class="hero">
+    <h1>Face Verification Demo</h1>
+    <p>
+        Register a known face, then upload another image to check whether it
+        matches an identity stored in the temporary embeddings database.
+    </p>
+</div>
+            """
     )
+
+    gr.HTML(
+        """
+<span class="hint">
+Use clear, front-facing photos with one visible face. The demo stores embeddings
+only for this running session, so the database may reset when the Space restarts.
+</span>
+            """
+    )
+
     with gr.Tabs():
-        with gr.TabItem("Add Person"):
-            with gr.Row():
-                input_image = gr.Image(label="Upload an image with a clear face", type="pil")
-                input_name = gr.Textbox(label="Person name", placeholder="Example: John Doe")
-            output_image = gr.Image(label="Detection result")
-            submit_btn = gr.Button("Add to database")
+        with gr.TabItem("1. Add Person"):
+            with gr.Row(equal_height=True):
+                with gr.Column(scale=1):
+                    input_image = gr.Image(
+                        label="Reference image",
+                        type="pil",
+                        height=360,
+                    )
+                    input_name = gr.Textbox(
+                        label="Person name",
+                        placeholder="Example: Ada Lovelace",
+                    )
+                    submit_btn = gr.Button(
+                        "Add person to database",
+                        variant="primary",
+                        elem_classes="primary-action",
+                    )
+                with gr.Column(scale=1):
+                    output_image = gr.Image(
+                        label="Detected face",
+                        height=420,
+                    )
+                    gr.HTML(
+                        """
+<span class="hint">
+If a face is detected, the annotated image confirms what face was stored.
+</span>
+                            """
+                    )
+
             submit_btn.click(
                 fn=add_person_ui,
                 inputs=[input_image, input_name],
                 outputs=output_image,
             )
-        with gr.TabItem("Verify Identity"):
-            with gr.Row():
-                verify_image = gr.Image(label="Upload an image to verify", type="pil")
-            verify_btn = gr.Button("Verify identity")
-            verify_output_name = gr.Textbox(label="Verification result")
-            verify_output_image = gr.Image(label="Detected face")
+
+        with gr.TabItem("2. Verify Identity"):
+            with gr.Row(equal_height=True):
+                with gr.Column(scale=1):
+                    verify_image = gr.Image(
+                        label="Image to verify",
+                        type="pil",
+                        height=360,
+                    )
+                    verify_btn = gr.Button(
+                        "Verify identity",
+                        variant="primary",
+                        elem_classes="primary-action",
+                    )
+                with gr.Column(scale=1):
+                    verify_output_name = gr.Textbox(
+                        label="Verification result",
+                        interactive=False,
+                        elem_classes="result-box",
+                    )
+                    verify_output_image = gr.Image(
+                        label="Detected face",
+                        height=360,
+                    )
+
             verify_btn.click(
                 fn=verify_person_ui,
                 inputs=verify_image,
@@ -54,7 +167,12 @@ with gr.Blocks() as FV_gr:
 
 
 def main():
-    FV_gr.launch(server_name="0.0.0.0", server_port=7860)
+    FV_gr.launch(
+        server_name="0.0.0.0",
+        server_port=7860,
+        theme=APP_THEME,
+        css=APP_CSS,
+    )
 
 
 if __name__ == "__main__":
