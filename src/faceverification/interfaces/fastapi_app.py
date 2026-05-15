@@ -76,11 +76,15 @@ IMAGE_ERROR_RESPONSES = {
 
 
 class FaceService(Protocol):
-    def add_person(self, image: Image.Image, name: str) -> Image.Image:
-        ...
+    """Service contract required by the HTTP layer.
 
-    def verify_person(self, image: Image.Image) -> tuple[str, Image.Image]:
-        ...
+    Implementations must accept normalized PIL images and return annotated PIL
+    images for optional API responses.
+    """
+
+    def add_person(self, image: Image.Image, name: str) -> Image.Image: ...
+
+    def verify_person(self, image: Image.Image) -> tuple[str, Image.Image]: ...
 
 
 @asynccontextmanager
@@ -203,6 +207,18 @@ def get_current_username(
 
 
 async def _read_image(upload: UploadFile) -> Image.Image:
+    """Validate an upload and return it as an RGB image.
+
+    Args:
+        upload: Multipart file received by FastAPI.
+
+    Returns:
+        RGB PIL image with EXIF orientation applied.
+
+    Raises:
+        HTTPException: If the file is not an image, is empty, too large, or invalid.
+    """
+
     if upload.content_type and not upload.content_type.startswith("image/"):
         raise HTTPException(
             status_code=status.HTTP_415_UNSUPPORTED_MEDIA_TYPE,

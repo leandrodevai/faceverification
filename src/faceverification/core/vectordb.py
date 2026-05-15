@@ -1,10 +1,4 @@
-"""Vector database adapter for face embedding storage and lookup.
-
-This module wraps ChromaDB behind a small project-specific interface. The rest
-of the application only needs to add face embeddings and query the nearest
-stored embedding, while this class owns the Chroma collection setup and result
-filtering.
-"""
+"""Small ChromaDB adapter for face embedding storage and lookup."""
 
 import uuid
 from collections.abc import Mapping
@@ -18,13 +12,7 @@ from faceverification.config import settings
 
 
 class VectorDB:
-    """Store and query face embeddings in a ChromaDB collection.
-
-    The collection is configured with the selected HNSW distance metric and can
-    run either in memory or against a persistent directory when one is provided.
-    Query results are post-processed with NumPy so the service layer receives a
-    simple `(metadata, distance)` pair.
-    """
+    """Store face embeddings and query the nearest known identity."""
 
     def __init__(
         self,
@@ -32,15 +20,12 @@ class VectorDB:
         name_collection: str | None = None,
         persist_directory: str | None = None,
     ):
-        """Initialize the ChromaDB client and face embeddings collection.
+        """Create an in-memory or persistent Chroma collection.
 
         Args:
-            distance_metric: HNSW distance metric used by ChromaDB. Common
-                values are `"l2"`, `"cosine"`, and `"ip"`.
-            name_collection: Name of the collection that stores face
-                embeddings.
-            persist_directory: Optional directory where ChromaDB should persist
-                data. When omitted, the database runs in memory.
+            distance_metric: Chroma HNSW metric, such as `"l2"` or `"cosine"`.
+            name_collection: Collection name for stored face embeddings.
+            persist_directory: Directory for persistent storage, or `None` for memory.
         """
         if distance_metric is None:
             distance_metric = settings.vector_db_distance_metric
@@ -60,13 +45,11 @@ class VectorDB:
         )
 
     def add_embedding(self, embedding: np.ndarray, metadata: Mapping[str, Any]) -> None:
-        """Add one face embedding and its metadata to the collection.
+        """Store one embedding with its metadata.
 
         Args:
-            embedding: Face embedding vector produced by the face recognition
-                model.
-            metadata: Metadata associated with the embedding, such as the
-                person's name.
+            embedding: Face embedding vector.
+            metadata: Data associated with the embedding, such as a person's name.
         """
         self.collection.add(
             embeddings=[embedding],
@@ -80,18 +63,16 @@ class VectorDB:
         threshold: float | None = None,
         n_results: int | None = None,
     ) -> tuple[Mapping[str, Any] | None, float]:
-        """Find the closest stored embedding within the configured threshold.
+        """Return matched metadata and distance, or `None` when outside threshold.
 
         Args:
-            embedding: Query embedding vector to compare against stored
-                embeddings.
-            threshold: Maximum Euclidean distance accepted as a match.
-            n_results: Number of nearest ChromaDB candidates to inspect.
+            embedding: Query embedding vector.
+            threshold: Maximum accepted distance for a match.
+            n_results: Number of nearest Chroma candidates to inspect.
 
         Returns:
-            A tuple containing the matched metadata and its distance. If no
-            candidate is within the threshold, metadata is `None` and the best
-            distance is still returned.
+            Matched metadata and best distance. Metadata is `None` when no
+            candidate is close enough.
         """
         if threshold is None:
             threshold = settings.face_match_threshold

@@ -1,9 +1,4 @@
-"""Face detection and embedding extraction utilities.
-
-This module centralizes the computer vision models used by the application:
-MTCNN detects faces and draws bounding boxes, while FaceNet converts a detected
-face into a normalized embedding suitable for vector search.
-"""
+"""Face detection and FaceNet embedding utilities."""
 
 from collections.abc import Sequence
 
@@ -20,12 +15,7 @@ class FaceNotDetectedError(ValueError):
 
 
 class ImageProcessor:
-    """Detect faces and generate FaceNet embeddings.
-
-    The processor owns the model lifecycle for MTCNN and InceptionResnetV1. It
-    accepts explicit configuration for tests or experiments, and falls back to
-    application settings when arguments are omitted.
-    """
+    """Wrap MTCNN detection and FaceNet embedding extraction."""
 
     def __init__(
         self,
@@ -33,16 +23,12 @@ class ImageProcessor:
         mtcnn_thresholds: Sequence[float] | None = None,
         facenet_pretrained: str | None = None,
     ):
-        """Initialize face detection and embedding models.
+        """Load models using explicit values or application settings.
 
         Args:
-            device: Device used for model inference. Use `"auto"` to select
-                CUDA when available, otherwise CPU.
+            device: Inference device. Use `"auto"` to prefer CUDA when available.
             mtcnn_thresholds: Detection thresholds for the three MTCNN stages.
-            facenet_pretrained: Pretrained FaceNet weights identifier.
-
-        Raises:
-            ValueError: If `device` is not `"auto"`, `"cpu"`, or `"cuda"`.
+            facenet_pretrained: Pretrained FaceNet weights name.
         """
         if device is None:
             device = settings.device
@@ -65,16 +51,16 @@ class ImageProcessor:
         self.facenet = InceptionResnetV1(pretrained=facenet_pretrained).eval().to(self.device)
 
     def get_embedding(self, image: Image.Image) -> torch.Tensor:
-        """Return a normalized embedding for the detected face in an image.
+        """Return a normalized FaceNet embedding for the detected face.
 
         Args:
-            image: PIL image containing a face.
+            image: PIL image containing a detectable face.
 
         Returns:
-            A one-dimensional normalized FaceNet embedding tensor.
+            One normalized FaceNet embedding tensor.
 
         Raises:
-            FaceNotDetectedError: If no face can be detected in the image.
+            FaceNotDetectedError: If MTCNN cannot extract a face.
         """
         face_tensor = self.mtcnn(image)
         if face_tensor is None:
@@ -91,14 +77,13 @@ class ImageProcessor:
         return features.squeeze(0)
 
     def detect_faces(self, image: Image.Image) -> tuple[Image.Image, bool]:
-        """Draw detected face bounding boxes on an image.
+        """Draw face boxes and return whether any face was found.
 
         Args:
             image: PIL image to inspect and annotate.
 
         Returns:
-            A tuple with the annotated image and a boolean indicating whether at
-            least one face was detected.
+            The annotated image and a flag indicating if at least one face was found.
         """
         boxes, probs = self.mtcnn.detect(image)
 

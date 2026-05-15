@@ -1,8 +1,4 @@
-"""Application service functions for face enrollment and verification.
-
-This module coordinates image preprocessing, embedding extraction, and vector
-database operations for the Gradio interface.
-"""
+"""Application service functions for face enrollment and verification."""
 
 from PIL import Image
 
@@ -17,18 +13,18 @@ vector_db = VectorDB()
 
 
 def add_person(image: Image.Image, name: str) -> Image.Image:
-    """Enroll a person by extracting and storing their face embedding.
+    """Store a person's face embedding and return the annotated image.
 
     Args:
-        image: Input image provided by the UI as a PIL image.
-        name: Person name to store as embedding metadata.
+        image: PIL image containing the person's face.
+        name: Person name to store with the embedding.
 
     Returns:
-        The input image annotated with detected face bounding boxes.
+        Image annotated with detected face boxes.
 
     Raises:
-        FaceNotDetectedError: If no face is detected in the input image.
-        TypeError: If embedding extraction does not return the expected tensor.
+        FaceNotDetectedError: If no face is detected.
+        TypeError: If embedding extraction returns an unexpected value.
     """
 
     img, presence = image_processor.detect_faces(image)
@@ -37,26 +33,26 @@ def add_person(image: Image.Image, name: str) -> Image.Image:
         raise FaceNotDetectedError("No faces were detected in the image.")
 
     faces_pt = image_processor.get_embedding(img)
-    if faces_pt is not None:
-        vector_db.add_embedding(faces_pt.cpu().numpy(), {"name": name})
-    else:
+    if faces_pt is None:
         raise TypeError("The extracted face embedding is not a torch.Tensor.")
+
+    vector_db.add_embedding(faces_pt.cpu().numpy(), {"name": name})
 
     return img
 
 
 def verify_person(image: Image.Image) -> tuple[str, Image.Image]:
-    """Verify whether the input face matches a stored person.
+    """Return the closest known person name and the annotated image.
 
     Args:
-        image: Input image provided by the UI as a PIL image.
+        image: PIL image containing the face to verify.
 
     Returns:
-        A tuple with the matched person name, or `"Unregistered Person"` when no match is
-        found, and the image annotated with detected face bounding boxes.
+        Matched person name, or `UNREGISTERED_PERSON`, plus the annotated image.
 
     Raises:
-        FaceNotDetectedError: If no face is detected in the input image.
+        FaceNotDetectedError: If no face is detected.
+        ValueError: If the vector database has no stored embeddings.
     """
     detected_faces, presence = image_processor.detect_faces(image.copy())
 
@@ -64,12 +60,12 @@ def verify_person(image: Image.Image) -> tuple[str, Image.Image]:
         raise FaceNotDetectedError("No faces were detected in the image.")
 
     faces_pt = image_processor.get_embedding(image)
-    if faces_pt is not None:
-        metadata, _ = vector_db.query_embedding(faces_pt.cpu().numpy())
+    if faces_pt is None:
+        raise FaceNotDetectedError("No faces were detected in the image.")
 
-        if metadata:
-            return metadata["name"], detected_faces
+    metadata, _ = vector_db.query_embedding(faces_pt.cpu().numpy())
 
-        return UNREGISTERED_PERSON, detected_faces
+    if metadata:
+        return metadata["name"], detected_faces
 
-    raise FaceNotDetectedError("No faces were detected in the image.")
+    return UNREGISTERED_PERSON, detected_faces
