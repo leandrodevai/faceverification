@@ -76,7 +76,16 @@ Interactive API documentation is available at:
 
 Protected endpoints require a bearer token. The default demo credentials are
 `demo` / `demo123`; override them with `FACEVERIFICATION_DEMO_USERNAME` and
-`FACEVERIFICATION_DEMO_PASSWORD` in `.env`.
+`FACEVERIFICATION_DEMO_PASSWORD` in `.env`. The JWT secret is also configurable
+and should be changed outside local demos.
+
+```env
+FACEVERIFICATION_DEMO_USERNAME=demo
+FACEVERIFICATION_DEMO_PASSWORD=demo123
+FACEVERIFICATION_JWT_SECRET_KEY=replace-this-with-a-long-random-secret
+FACEVERIFICATION_JWT_ACCESS_TOKEN_EXPIRE_MINUTES=60
+FACEVERIFICATION_MAX_UPLOAD_BYTES=5242880
+```
 
 ```bash
 curl -X POST http://localhost:8000/auth/login \
@@ -96,6 +105,9 @@ Authorization: Bearer <access_token>
 - `POST /auth/login`: returns a JWT access token for the demo user.
 - `POST /persons`: enrolls a known person from an uploaded image and form `name`.
 - `POST /verify`: verifies whether an uploaded face matches a known person.
+
+Both face endpoints return an annotated image by default. Add
+`?include_image=false` when the client only needs the JSON result.
 
 ## Deployment Notes
 

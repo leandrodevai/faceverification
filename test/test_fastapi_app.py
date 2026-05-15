@@ -3,6 +3,7 @@ from io import BytesIO
 from fastapi.testclient import TestClient
 from PIL import Image
 
+from faceverification.config import settings
 from faceverification.core.image_processor import FaceNotDetectedError
 from faceverification.interfaces.fastapi_app import app, get_face_service
 
@@ -125,6 +126,24 @@ def test_verify_identity_returns_match_result():
     assert body["annotated_image"].startswith("data:image/png;base64,")
 
 
+def test_verify_identity_can_skip_annotated_image():
+    fake_service = FakeService()
+    app.dependency_overrides[get_face_service] = lambda: fake_service
+    try:
+        client = TestClient(app)
+        response = client.post(
+            "/verify?include_image=false",
+            headers=_auth_headers(client),
+            files={"image": ("face.png", _image_bytes(), "image/png")},
+        )
+    finally:
+        app.dependency_overrides.clear()
+
+    body = response.json()
+    assert response.status_code == 200
+    assert body == {"name": "Ada", "matched": True}
+
+
 def test_verify_identity_returns_unprocessable_when_no_face_is_detected():
     class NoFaceService(FakeService):
         def verify_person(self, image):
@@ -143,6 +162,26 @@ def test_verify_identity_returns_unprocessable_when_no_face_is_detected():
 
     assert response.status_code == 422
     assert response.json() == {"detail": "No faces were detected in the image."}
+
+
+def test_verify_identity_returns_internal_error_for_unexpected_service_failure():
+    class BrokenService(FakeService):
+        def verify_person(self, image):
+            raise RuntimeError("model failed")
+
+    app.dependency_overrides[get_face_service] = lambda: BrokenService()
+    try:
+        client = TestClient(app)
+        response = client.post(
+            "/verify",
+            headers=_auth_headers(client),
+            files={"image": ("face.png", _image_bytes(), "image/png")},
+        )
+    finally:
+        app.dependency_overrides.clear()
+
+    assert response.status_code == 500
+    assert response.json() == {"detail": "Face verification failed."}
 
 
 def test_enroll_person_rejects_blank_name():
@@ -176,3 +215,20 @@ def test_upload_rejects_non_image_content_type():
 
     assert response.status_code == 415
     assert response.json() == {"detail": "Uploaded file must be an image."}
+
+
+def test_upload_rejects_large_image(monkeypatch):
+    monkeypatch.setattr(settings, "max_upload_bytes", 1)
+    app.dependency_overrides[get_face_service] = lambda: FakeService()
+    try:
+        client = TestClient(app)
+        response = client.post(
+            "/verify",
+            headers=_auth_headers(client),
+            files={"image": ("face.png", _image_bytes(), "image/png")},
+        )
+    finally:
+        app.dependency_overrides.clear()
+
+    assert response.status_code == 413
+    assert response.json() == {"detail": "Uploaded image is too large."}

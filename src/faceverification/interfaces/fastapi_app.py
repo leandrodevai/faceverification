@@ -1,40 +1,24 @@
-"""HTTP API for enrolling and verifying faces.
-
-The module exposes a small FastAPI application around the service layer:
-
-- ``POST /auth/login`` issues a short-lived JWT for the demo user.
-- ``POST /persons`` stores a known person embedding from an uploaded image.
-- ``POST /verify`` checks whether an uploaded face matches the local database.
-
-FastAPI uses the route metadata, Pydantic field descriptions, and endpoint
-docstrings below to build the interactive documentation at ``/docs`` and
-``/redoc``.
-"""
-
+import logging
 from base64 import b64encode
 from contextlib import asynccontextmanager
 from datetime import UTC, datetime, timedelta
 from io import BytesIO
 from secrets import compare_digest
-from types import ModuleType
-from typing import Annotated
+from typing import Annotated, Protocol
 
 import jwt
-from fastapi import Depends, FastAPI, File, Form, HTTPException, Request, UploadFile, status
+from fastapi import Depends, FastAPI, File, Form, HTTPException, Query, Request, UploadFile, status
 from fastapi.security import HTTPAuthorizationCredentials, HTTPBearer
 from jwt import ExpiredSignatureError, InvalidTokenError
 from PIL import Image, ImageOps, UnidentifiedImageError
-from pydantic import BaseModel, Field
+from pydantic import BaseModel
 
 from faceverification.config import settings
 from faceverification.core.image_processor import FaceNotDetectedError
+from faceverification.services.face_verification import UNREGISTERED_PERSON
 
 bearer_scheme = HTTPBearer(auto_error=False)
-
-DATA_URL_DESCRIPTION = (
-    "PNG image encoded as a data URL. The image contains the service annotations "
-    "for the detected face."
-)
+logger = logging.getLogger(__name__)
 
 AUTH_RESPONSES = {
     status.HTTP_401_UNAUTHORIZED: {
@@ -64,6 +48,14 @@ IMAGE_ERROR_RESPONSES = {
             },
         },
     },
+    status.HTTP_413_CONTENT_TOO_LARGE: {
+        "description": "The uploaded image is too large.",
+        "content": {
+            "application/json": {
+                "example": {"detail": "Uploaded image is too large."},
+            },
+        },
+    },
     status.HTTP_422_UNPROCESSABLE_CONTENT: {
         "description": "The request is valid, but no usable face or name was found.",
         "content": {
@@ -83,9 +75,16 @@ IMAGE_ERROR_RESPONSES = {
 }
 
 
+class FaceService(Protocol):
+    def add_person(self, image: Image.Image, name: str) -> Image.Image:
+        ...
+
+    def verify_person(self, image: Image.Image) -> tuple[str, Image.Image]:
+        ...
+
+
 @asynccontextmanager
 async def lifespan(app: FastAPI):
-    """Load the face verification service once when the API starts."""
     from faceverification.services import face_verification
 
     app.state.face_service = face_verification
@@ -94,11 +93,7 @@ async def lifespan(app: FastAPI):
 
 app = FastAPI(
     title="Face Verification API",
-    description=(
-        "Demo API for enrolling known people and verifying uploaded face images. "
-        "Authenticate with `/auth/login`, then send the returned bearer token to "
-        "the protected face-verification endpoints."
-    ),
+    description="Enroll known people and verify uploaded face images.",
     version="0.1.0",
     lifespan=lifespan,
     contact={
@@ -109,17 +104,13 @@ app = FastAPI(
 
 
 class HealthResponse(BaseModel):
-    """Health-check payload returned by the system endpoint."""
-
-    status: str = Field(default="ok", description="Current API status.")
+    status: str = "ok"
 
 
 class EnrollResponse(BaseModel):
-    """Response returned after a person is stored in the embeddings database."""
-
-    message: str = Field(description="Human-readable result message.")
-    name: str = Field(description="Normalized person name stored with the embedding.")
-    annotated_image: str = Field(description=DATA_URL_DESCRIPTION)
+    message: str
+    name: str
+    annotated_image: str | None = None
 
     model_config = {
         "json_schema_extra": {
@@ -133,16 +124,9 @@ class EnrollResponse(BaseModel):
 
 
 class VerifyResponse(BaseModel):
-    """Response returned after comparing an uploaded face against known people."""
-
-    name: str = Field(
-        description=(
-            "Matched person name. Returns `Unregistered Person` when the closest "
-            "embedding is outside the configured match threshold."
-        ),
-    )
-    matched: bool = Field(description="Whether the uploaded face matched a known person.")
-    annotated_image: str = Field(description=DATA_URL_DESCRIPTION)
+    name: str
+    matched: bool
+    annotated_image: str | None = None
 
     model_config = {
         "json_schema_extra": {
@@ -156,10 +140,8 @@ class VerifyResponse(BaseModel):
 
 
 class TokenResponse(BaseModel):
-    """Bearer token returned by the demo authentication endpoint."""
-
-    access_token: str = Field(description="JWT access token used in the Authorization header.")
-    token_type: str = Field(default="bearer", description="OAuth2-compatible token type.")
+    access_token: str
+    token_type: str = "bearer"
 
     model_config = {
         "json_schema_extra": {
@@ -171,13 +153,11 @@ class TokenResponse(BaseModel):
     }
 
 
-def get_face_service(request: Request) -> ModuleType:
-    """Return the service module stored during application startup."""
+def get_face_service(request: Request) -> FaceService:
     return request.app.state.face_service
 
 
 def _unauthorized_error(detail: str = "Could not validate credentials.") -> HTTPException:
-    """Build a consistent 401 response with the bearer authentication challenge."""
     return HTTPException(
         status_code=status.HTTP_401_UNAUTHORIZED,
         detail=detail,
@@ -186,14 +166,12 @@ def _unauthorized_error(detail: str = "Could not validate credentials.") -> HTTP
 
 
 def _create_access_token(username: str) -> str:
-    """Create a signed JWT for the authenticated demo user."""
     expires_at = datetime.now(UTC) + timedelta(minutes=settings.jwt_access_token_expire_minutes)
     payload = {"sub": username, "exp": expires_at}
     return jwt.encode(payload, settings.jwt_secret_key, algorithm=settings.jwt_algorithm)
 
 
 def _authenticate_demo_user(username: str, password: str) -> bool:
-    """Validate demo credentials using constant-time comparisons."""
     valid_username = compare_digest(username, settings.demo_username)
     valid_password = compare_digest(password, settings.demo_password)
     return valid_username and valid_password
@@ -202,7 +180,6 @@ def _authenticate_demo_user(username: str, password: str) -> bool:
 def get_current_username(
     credentials: Annotated[HTTPAuthorizationCredentials | None, Depends(bearer_scheme)],
 ) -> str:
-    """Decode the bearer token and return the authenticated username."""
     if credentials is None:
         raise _unauthorized_error("Not authenticated")
 
@@ -226,7 +203,6 @@ def get_current_username(
 
 
 async def _read_image(upload: UploadFile) -> Image.Image:
-    """Read an uploaded image, apply EXIF orientation, and return it as RGB."""
     if upload.content_type and not upload.content_type.startswith("image/"):
         raise HTTPException(
             status_code=status.HTTP_415_UNSUPPORTED_MEDIA_TYPE,
@@ -238,6 +214,11 @@ async def _read_image(upload: UploadFile) -> Image.Image:
         raise HTTPException(
             status_code=status.HTTP_400_BAD_REQUEST,
             detail="Uploaded image is empty.",
+        )
+    if len(contents) > settings.max_upload_bytes:
+        raise HTTPException(
+            status_code=status.HTTP_413_CONTENT_TOO_LARGE,
+            detail="Uploaded image is too large.",
         )
 
     try:
@@ -252,25 +233,28 @@ async def _read_image(upload: UploadFile) -> Image.Image:
 
 
 def _image_to_data_url(image: Image.Image) -> str:
-    """Serialize a PIL image as a PNG data URL for JSON responses."""
     buffer = BytesIO()
     image.save(buffer, format="PNG")
     encoded = b64encode(buffer.getvalue()).decode("ascii")
     return f"data:image/png;base64,{encoded}"
 
 
-def _service_error(exc: Exception) -> HTTPException:
-    """Map service-layer exceptions to API-friendly HTTP errors."""
-    if isinstance(exc, FaceNotDetectedError):
-        return HTTPException(
-            status_code=status.HTTP_422_UNPROCESSABLE_CONTENT,
-            detail=str(exc),
-        )
-    if isinstance(exc, ValueError):
-        return HTTPException(
-            status_code=status.HTTP_400_BAD_REQUEST,
-            detail=str(exc),
-        )
+def _face_not_detected_error(exc: FaceNotDetectedError) -> HTTPException:
+    return HTTPException(
+        status_code=status.HTTP_422_UNPROCESSABLE_CONTENT,
+        detail=str(exc),
+    )
+
+
+def _bad_service_request(exc: ValueError) -> HTTPException:
+    return HTTPException(
+        status_code=status.HTTP_400_BAD_REQUEST,
+        detail=str(exc),
+    )
+
+
+def _unexpected_service_error(exc: Exception) -> HTTPException:
+    logger.exception("Face verification service failed")
     return HTTPException(
         status_code=status.HTTP_500_INTERNAL_SERVER_ERROR,
         detail="Face verification failed.",
@@ -281,19 +265,16 @@ def _service_error(exc: Exception) -> HTTPException:
     "/health",
     response_model=HealthResponse,
     summary="Check API health",
-    response_description="The API is running.",
     tags=["system"],
 )
 def health() -> HealthResponse:
-    """Return a lightweight status response for uptime checks."""
     return HealthResponse()
 
 
 @app.post(
     "/auth/login",
     response_model=TokenResponse,
-    summary="Issue a demo access token",
-    response_description="JWT bearer token for protected endpoints.",
+    summary="Log in",
     responses={
         status.HTTP_401_UNAUTHORIZED: {
             "description": "The username or password is incorrect.",
@@ -309,14 +290,13 @@ def health() -> HealthResponse:
 def login(
     username: Annotated[
         str,
-        Form(description="Demo username configured with `FACEVERIFICATION_DEMO_USERNAME`."),
+        Form(),
     ],
     password: Annotated[
         str,
-        Form(description="Demo password configured with `FACEVERIFICATION_DEMO_PASSWORD`."),
+        Form(),
     ],
 ) -> TokenResponse:
-    """Authenticate the demo user and return a signed JWT access token."""
     if not _authenticate_demo_user(username, password):
         raise _unauthorized_error("Incorrect username or password.")
 
@@ -326,9 +306,9 @@ def login(
 @app.post(
     "/persons",
     response_model=EnrollResponse,
+    response_model_exclude_none=True,
     status_code=status.HTTP_201_CREATED,
     summary="Enroll a known person",
-    response_description="The person was stored and the annotated upload is returned.",
     responses={**AUTH_RESPONSES, **IMAGE_ERROR_RESPONSES},
     tags=["face verification"],
 )
@@ -342,14 +322,13 @@ async def enroll_person(
         Form(description="Person name to associate with the generated face embedding."),
     ],
     current_username: Annotated[str, Depends(get_current_username)],
-    service: Annotated[ModuleType, Depends(get_face_service)],
+    service: Annotated[FaceService, Depends(get_face_service)],
+    include_image: Annotated[
+        bool,
+        Query(description="Include the annotated image as a base64 data URL."),
+    ] = True,
 ) -> EnrollResponse:
-    """Store a new known person in the embeddings database.
-
-    The endpoint extracts a face embedding from the uploaded image and stores it
-    under the submitted name. It returns the normalized name and a PNG data URL
-    with the annotated detection result.
-    """
+    _ = current_username
     cleaned_name = name.strip()
     if not cleaned_name:
         raise HTTPException(
@@ -360,21 +339,25 @@ async def enroll_person(
     pil_image = await _read_image(image)
     try:
         annotated_image = service.add_person(pil_image, cleaned_name)
+    except FaceNotDetectedError as exc:
+        raise _face_not_detected_error(exc) from exc
+    except ValueError as exc:
+        raise _bad_service_request(exc) from exc
     except Exception as exc:
-        raise _service_error(exc) from exc
+        raise _unexpected_service_error(exc) from exc
 
     return EnrollResponse(
         message="Person added to the embeddings database.",
         name=cleaned_name,
-        annotated_image=_image_to_data_url(annotated_image),
+        annotated_image=_image_to_data_url(annotated_image) if include_image else None,
     )
 
 
 @app.post(
     "/verify",
     response_model=VerifyResponse,
+    response_model_exclude_none=True,
     summary="Verify an uploaded face",
-    response_description="Best match result and the annotated upload.",
     responses={**AUTH_RESPONSES, **IMAGE_ERROR_RESPONSES},
     tags=["face verification"],
 )
@@ -384,23 +367,27 @@ async def verify_identity(
         File(description="Image containing one clear face to compare with known people."),
     ],
     current_username: Annotated[str, Depends(get_current_username)],
-    service: Annotated[ModuleType, Depends(get_face_service)],
+    service: Annotated[FaceService, Depends(get_face_service)],
+    include_image: Annotated[
+        bool,
+        Query(description="Include the annotated image as a base64 data URL."),
+    ] = True,
 ) -> VerifyResponse:
-    """Compare an uploaded face against the local embeddings database.
-
-    A successful response always includes the closest label and whether it is
-    considered a match according to the configured distance threshold.
-    """
+    _ = current_username
     pil_image = await _read_image(image)
     try:
         name, annotated_image = service.verify_person(pil_image)
+    except FaceNotDetectedError as exc:
+        raise _face_not_detected_error(exc) from exc
+    except ValueError as exc:
+        raise _bad_service_request(exc) from exc
     except Exception as exc:
-        raise _service_error(exc) from exc
+        raise _unexpected_service_error(exc) from exc
 
     return VerifyResponse(
         name=name,
-        matched=name != "Unregistered Person",
-        annotated_image=_image_to_data_url(annotated_image),
+        matched=name != UNREGISTERED_PERSON,
+        annotated_image=_image_to_data_url(annotated_image) if include_image else None,
     )
 
 

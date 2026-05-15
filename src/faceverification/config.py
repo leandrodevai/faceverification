@@ -19,6 +19,7 @@ class Settings(BaseSettings):
     jwt_secret_key: str = "change-me-in-production-demo-secret-32-bytes-min"
     jwt_algorithm: str = "HS256"
     jwt_access_token_expire_minutes: int = 60
+    max_upload_bytes: int = 5 * 1024 * 1024
 
     model_config = SettingsConfigDict(
         env_file=".env",

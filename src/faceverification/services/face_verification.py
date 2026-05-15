@@ -9,6 +9,8 @@ from PIL import Image
 from faceverification.core.image_processor import FaceNotDetectedError, ImageProcessor
 from faceverification.core.vectordb import VectorDB
 
+UNREGISTERED_PERSON = "Unregistered Person"
+
 image_processor = ImageProcessor()
 
 vector_db = VectorDB()
@@ -68,6 +70,6 @@ def verify_person(image: Image.Image) -> tuple[str, Image.Image]:
         if metadata:
             return metadata["name"], detected_faces
 
-        return "Unregistered Person", detected_faces
+        return UNREGISTERED_PERSON, detected_faces
 
     raise FaceNotDetectedError("No faces were detected in the image.")
