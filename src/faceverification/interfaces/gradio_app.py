@@ -25,7 +25,7 @@ def verify_person_ui(image: Image.Image | None) -> tuple[str, Image.Image]:
             raise gr.Error("Upload an image before verifying an identity.")
 
         name, annotated_image = verify_person(image)
-        return f"Result: {name}", annotated_image
+        return name, annotated_image
     except FaceNotDetectedError as exc:
         raise gr.Error(str(exc)) from exc
     except Exception as exc:
@@ -83,7 +83,7 @@ with (
     <h1>Face Verification Demo</h1>
     <p>
         Register a known face, then upload another image to check whether it
-        matches an identity stored in the temporary embeddings database.
+        matches an identity stored in the database.
     </p>
 </div>
             """
@@ -92,7 +92,7 @@ with (
     gr.HTML(
         """
 <span class="hint">
-Use clear, front-facing photos with one visible face. The demo stores embeddings
+Use clear, front-facing photos with one visible face. The demo stores data
 only for this running session, so the database may reset when the Space restarts.
 </span>
             """
@@ -109,7 +109,7 @@ only for this running session, so the database may reset when the Space restarts
                     )
                     input_name = gr.Textbox(
                         label="Person name",
-                        placeholder="Example: Ada Lovelace",
+                        placeholder="Example: John Doe",
                     )
                     submit_btn = gr.Button(
                         "Add person to database",
@@ -168,7 +168,6 @@ If a face is detected, the annotated image confirms what face was stored.
 
 def main():
     FV_gr.launch(
-        server_name="0.0.0.0",
         server_port=7860,
         theme=APP_THEME,
         css=APP_CSS,

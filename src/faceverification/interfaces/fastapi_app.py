@@ -410,7 +410,7 @@ async def verify_identity(
 def main() -> None:
     import uvicorn
 
-    uvicorn.run("faceverification.interfaces.fastapi_app:app", host="0.0.0.0", port=8000)
+    uvicorn.run("faceverification.interfaces.fastapi_app:app", port=8000)
 
 
 if __name__ == "__main__":
