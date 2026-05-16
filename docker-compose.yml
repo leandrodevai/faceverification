@@ -2,10 +2,8 @@ services:
   api:
     build:
       context: .
-      args:
-        APP_VARIANT: fastapi
+      target: fastapi
     image: faceverification:fastapi
-    command: uvicorn faceverification.interfaces.fastapi_app:app --host 0.0.0.0 --port 8000
     ports:
       - "8000:8000"
     environment:
@@ -23,10 +21,8 @@ services:
   gradio:
     build:
       context: .
-      args:
-        APP_VARIANT: gradio
+      target: gradio
     image: faceverification:gradio
-    command: python -m faceverification.interfaces.gradio_app
     profiles:
       - gradio
     ports:

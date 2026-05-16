@@ -1,13 +1,10 @@
-FROM python:3.11-slim
+FROM python:3.11-slim AS app
 
 ENV PYTHONDONTWRITEBYTECODE=1 \
     PYTHONUNBUFFERED=1 \
     PIP_NO_CACHE_DIR=1 \
     PYTHONPATH=/app/src \
     FACEVERIFICATION_DEVICE=cpu
-
-ARG APP_VARIANT=gradio
-ENV APP_VARIANT=${APP_VARIANT}
 
 WORKDIR /app
 
@@ -31,8 +28,8 @@ USER appuser
 
 EXPOSE 8000 7860
 
-CMD if [ "$APP_VARIANT" = "fastapi" ]; then \
-        exec uvicorn faceverification.interfaces.fastapi_app:app --host 0.0.0.0 --port 8000; \
-    else \
-        exec python -m faceverification.interfaces.gradio_app; \
-    fi
+FROM app AS fastapi
+CMD ["uvicorn", "faceverification.interfaces.fastapi_app:app", "--host", "0.0.0.0", "--port", "8000"]
+
+FROM app AS gradio
+CMD ["python", "-m", "faceverification.interfaces.gradio_app"]

@@ -57,17 +57,25 @@ jobs:
               --name "$RESOURCE_GROUP" \
               --location "$AZURE_LOCATION"
 
+            parameters=(
+              containerAppName="$CONTAINER_APP_NAME"
+              image="$IMAGE"
+              demoUsername="$DEMO_USERNAME"
+              demoPassword="$DEMO_PASSWORD"
+              jwtSecretKey="$JWT_SECRET_KEY"
+            )
+
+            if [ -n "$GHCR_PULL_TOKEN" ]; then
+              parameters+=(
+                registryUsername="$GHCR_PULL_USERNAME"
+                registryPassword="$GHCR_PULL_TOKEN"
+              )
+            fi
+
             deployment_output=$(az deployment group create \
               --resource-group "$RESOURCE_GROUP" \
               --template-file infra/bicep/main.bicep \
-              --parameters \
-                containerAppName="$CONTAINER_APP_NAME" \
-                image="$IMAGE" \
-                demoUsername="$DEMO_USERNAME" \
-                demoPassword="$DEMO_PASSWORD" \
-                jwtSecretKey="$JWT_SECRET_KEY" \
-                registryUsername="$GHCR_PULL_USERNAME" \
-                registryPassword="$GHCR_PULL_TOKEN" \
+              --parameters "${parameters[@]}" \
               --query properties.outputs.appUrl.value \
               --output tsv)
 

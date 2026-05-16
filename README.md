@@ -156,7 +156,9 @@ docker compose --profile gradio up --build
 
 The Gradio UI will be available at http://localhost:7860.
 
-Both services are built from the same `Dockerfile` with different variants:
+Both services are built from the same `Dockerfile`. The heavy application
+layers live in the shared `app` stage; the `fastapi` and `gradio` stages only
+set different default commands:
 
 - `fastapi`: published to GHCR by the container workflow.
 - `gradio`: used by the Hugging Face Docker Space.
@@ -239,16 +241,6 @@ FACEVERIFICATION_DEMO_USERNAME
 FACEVERIFICATION_DEMO_PASSWORD
 FACEVERIFICATION_JWT_SECRET_KEY
 ```
-
-Optional GitHub repository secrets for private GHCR packages:
-
-```text
-GHCR_PULL_USERNAME
-GHCR_PULL_TOKEN
-```
-
-If the GHCR package is public, those optional secrets can be omitted. If it is
-private, `GHCR_PULL_TOKEN` must be a GitHub token with package read access.
 
 To avoid ongoing cost while keeping the OIDC and RBAC setup intact, remove the
 demo resources inside the configured resource group from Azure when they are no

@@ -130,10 +130,6 @@ resource app 'Microsoft.App/containerApps@2024-03-01' = {
           image: image
           env: [
             {
-              name: 'APP_VARIANT'
-              value: 'fastapi'
-            }
-            {
               name: 'FACEVERIFICATION_DEVICE'
               value: 'cpu'
             }
