@@ -53,6 +53,9 @@ jobs:
           inlineScript: |
             set -euo pipefail
 
+            az provider register --namespace Microsoft.App --wait
+            az provider register --namespace Microsoft.OperationalInsights --wait
+
             az group create \
               --name "$RESOURCE_GROUP" \
               --location "$AZURE_LOCATION"
