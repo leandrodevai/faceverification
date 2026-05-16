@@ -134,6 +134,14 @@ resource app 'Microsoft.App/containerApps@2024-03-01' = {
               value: 'cpu'
             }
             {
+              name: 'FACEVERIFICATION_DEBUG'
+              value: 'false'
+            }
+            {
+              name: 'FACEVERIFICATION_LOG_FORMAT'
+              value: 'json'
+            }
+            {
               name: 'FACEVERIFICATION_DEMO_USERNAME'
               secretRef: 'demo-username'
             }

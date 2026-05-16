@@ -4,6 +4,9 @@ from pydantic_settings import BaseSettings, SettingsConfigDict
 
 
 class Settings(BaseSettings):
+    debug: bool = False
+    log_format: Literal["json", "text"] = "json"
+
     vector_db_distance_metric: str = "l2"
     vector_db_collection: str = "face_embeddings"
     vector_db_persist_directory: str | None = None

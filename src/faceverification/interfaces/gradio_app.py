@@ -1,8 +1,19 @@
+from functools import cache
+
 import gradio as gr
 from PIL import Image
 
 from faceverification.core.image_processor import FaceNotDetectedError
-from faceverification.services.face_verification import add_person, verify_person
+from faceverification.logging_config import configure_logging
+
+configure_logging()
+
+
+@cache
+def _face_service():
+    from faceverification.services.face_verification import add_person, verify_person
+
+    return add_person, verify_person
 
 
 def add_person_ui(image: Image.Image | None, name: str) -> Image.Image:
@@ -12,6 +23,7 @@ def add_person_ui(image: Image.Image | None, name: str) -> Image.Image:
         if not name or not name.strip():
             raise gr.Error("Enter a name before adding the person.")
 
+        add_person, _ = _face_service()
         return add_person(image, name.strip())
     except FaceNotDetectedError as exc:
         raise gr.Error(str(exc)) from exc
@@ -24,6 +36,7 @@ def verify_person_ui(image: Image.Image | None) -> tuple[str, Image.Image]:
         if image is None:
             raise gr.Error("Upload an image before verifying an identity.")
 
+        _, verify_person = _face_service()
         name, annotated_image = verify_person(image)
         return name, annotated_image
     except FaceNotDetectedError as exc:

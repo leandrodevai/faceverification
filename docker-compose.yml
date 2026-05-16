@@ -11,6 +11,8 @@ services:
       FACEVERIFICATION_DEMO_USERNAME: ${FACEVERIFICATION_DEMO_USERNAME:-demo}
       FACEVERIFICATION_DEMO_PASSWORD: ${FACEVERIFICATION_DEMO_PASSWORD:-demo123}
       FACEVERIFICATION_JWT_SECRET_KEY: ${FACEVERIFICATION_JWT_SECRET_KEY:-change-me-in-production-demo-secret-32-bytes-min}
+      FACEVERIFICATION_DEBUG: ${FACEVERIFICATION_DEBUG:-true}
+      FACEVERIFICATION_LOG_FORMAT: ${FACEVERIFICATION_LOG_FORMAT:-text}
     healthcheck:
       test: [ "CMD", "python", "-c", "import urllib.request; urllib.request.urlopen('http://127.0.0.1:8000/health', timeout=5)" ]
       interval: 30s
@@ -29,5 +31,7 @@ services:
       - "7860:7860"
     environment:
       FACEVERIFICATION_DEVICE: cpu
+      FACEVERIFICATION_DEBUG: ${FACEVERIFICATION_DEBUG:-true}
+      FACEVERIFICATION_LOG_FORMAT: ${FACEVERIFICATION_LOG_FORMAT:-text}
       GRADIO_SERVER_NAME: 0.0.0.0
       GRADIO_SERVER_PORT: 7860

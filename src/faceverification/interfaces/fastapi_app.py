@@ -4,7 +4,9 @@ from contextlib import asynccontextmanager
 from datetime import UTC, datetime, timedelta
 from io import BytesIO
 from secrets import compare_digest
+from time import perf_counter
 from typing import Annotated, Protocol
+from uuid import uuid4
 
 import jwt
 from fastapi import Depends, FastAPI, File, Form, HTTPException, Query, Request, UploadFile, status
@@ -15,7 +17,10 @@ from pydantic import BaseModel
 
 from faceverification.config import settings
 from faceverification.core.image_processor import FaceNotDetectedError
+from faceverification.logging_config import configure_logging, request_id_context
 from faceverification.services.face_verification import UNREGISTERED_PERSON
+
+configure_logging()
 
 bearer_scheme = HTTPBearer(auto_error=False)
 logger = logging.getLogger(__name__)
@@ -105,6 +110,48 @@ app = FastAPI(
         "url": "https://github.com/leandrodevai/faceverification",
     },
 )
+
+
+@app.middleware("http")
+async def log_requests(request: Request, call_next):
+    request_id = request.headers.get("x-request-id") or str(uuid4())
+    context_token = request_id_context.set(request_id)
+    started_at = perf_counter()
+
+    try:
+        response = await call_next(request)
+    except Exception:
+        elapsed_ms = round((perf_counter() - started_at) * 1000, 2)
+        logger.exception(
+            "request_failed",
+            extra={
+                "extra_fields": {
+                    "event": "request_failed",
+                    "method": request.method,
+                    "path": request.url.path,
+                    "duration_ms": elapsed_ms,
+                }
+            },
+        )
+        raise
+    else:
+        elapsed_ms = round((perf_counter() - started_at) * 1000, 2)
+        response.headers["x-request-id"] = request_id
+        logger.info(
+            "request_completed",
+            extra={
+                "extra_fields": {
+                    "event": "request_completed",
+                    "method": request.method,
+                    "path": request.url.path,
+                    "status_code": response.status_code,
+                    "duration_ms": elapsed_ms,
+                }
+            },
+        )
+        return response
+    finally:
+        request_id_context.reset(context_token)
 
 
 class HealthResponse(BaseModel):
@@ -226,6 +273,16 @@ async def _read_image(upload: UploadFile) -> Image.Image:
         )
 
     contents = await upload.read()
+    logger.debug(
+        "upload_received",
+        extra={
+            "extra_fields": {
+                "event": "upload_received",
+                "content_type": upload.content_type,
+                "size_bytes": len(contents),
+            }
+        },
+    )
     if not contents:
         raise HTTPException(
             status_code=status.HTTP_400_BAD_REQUEST,
@@ -240,7 +297,19 @@ async def _read_image(upload: UploadFile) -> Image.Image:
     try:
         image = Image.open(BytesIO(contents))
         image = ImageOps.exif_transpose(image)
-        return image.convert("RGB")
+        rgb_image = image.convert("RGB")
+        logger.debug(
+            "upload_image_decoded",
+            extra={
+                "extra_fields": {
+                    "event": "upload_image_decoded",
+                    "width": rgb_image.width,
+                    "height": rgb_image.height,
+                    "mode": rgb_image.mode,
+                }
+            },
+        )
+        return rgb_image
     except (UnidentifiedImageError, OSError) as exc:
         raise HTTPException(
             status_code=status.HTTP_400_BAD_REQUEST,
@@ -269,8 +338,17 @@ def _bad_service_request(exc: ValueError) -> HTTPException:
     )
 
 
-def _unexpected_service_error(exc: Exception) -> HTTPException:
-    logger.exception("Face verification service failed")
+def _unexpected_service_error(exc: Exception, operation: str) -> HTTPException:
+    logger.exception(
+        "face_service_failed",
+        extra={
+            "extra_fields": {
+                "event": "face_service_failed",
+                "operation": operation,
+                "exception_type": type(exc).__name__,
+            }
+        },
+    )
     return HTTPException(
         status_code=status.HTTP_500_INTERNAL_SERVER_ERROR,
         detail="Face verification failed.",
@@ -314,8 +392,13 @@ def login(
     ],
 ) -> TokenResponse:
     if not _authenticate_demo_user(username, password):
+        logger.warning(
+            "auth_login_failed",
+            extra={"extra_fields": {"event": "auth_login_failed"}},
+        )
         raise _unauthorized_error("Incorrect username or password.")
 
+    logger.debug("auth_login_succeeded", extra={"extra_fields": {"event": "auth_login_succeeded"}})
     return TokenResponse(access_token=_create_access_token(username))
 
 
@@ -353,6 +436,16 @@ async def enroll_person(
         )
 
     pil_image = await _read_image(image)
+    logger.debug(
+        "face_enroll_started",
+        extra={
+            "extra_fields": {
+                "event": "face_enroll_started",
+                "name_length": len(cleaned_name),
+                "include_image": include_image,
+            }
+        },
+    )
     try:
         annotated_image = service.add_person(pil_image, cleaned_name)
     except FaceNotDetectedError as exc:
@@ -360,7 +453,17 @@ async def enroll_person(
     except ValueError as exc:
         raise _bad_service_request(exc) from exc
     except Exception as exc:
-        raise _unexpected_service_error(exc) from exc
+        raise _unexpected_service_error(exc, "enroll") from exc
+
+    logger.debug(
+        "face_enroll_completed",
+        extra={
+            "extra_fields": {
+                "event": "face_enroll_completed",
+                "include_image": include_image,
+            }
+        },
+    )
 
     return EnrollResponse(
         message="Person added to the embeddings database.",
@@ -391,6 +494,10 @@ async def verify_identity(
 ) -> VerifyResponse:
     _ = current_username
     pil_image = await _read_image(image)
+    logger.debug(
+        "face_verify_started",
+        extra={"extra_fields": {"event": "face_verify_started", "include_image": include_image}},
+    )
     try:
         name, annotated_image = service.verify_person(pil_image)
     except FaceNotDetectedError as exc:
@@ -398,11 +505,23 @@ async def verify_identity(
     except ValueError as exc:
         raise _bad_service_request(exc) from exc
     except Exception as exc:
-        raise _unexpected_service_error(exc) from exc
+        raise _unexpected_service_error(exc, "verify") from exc
+
+    matched = name != UNREGISTERED_PERSON
+    logger.debug(
+        "face_verify_completed",
+        extra={
+            "extra_fields": {
+                "event": "face_verify_completed",
+                "matched": matched,
+                "include_image": include_image,
+            }
+        },
+    )
 
     return VerifyResponse(
         name=name,
-        matched=name != UNREGISTERED_PERSON,
+        matched=matched,
         annotated_image=_image_to_data_url(annotated_image) if include_image else None,
     )
 

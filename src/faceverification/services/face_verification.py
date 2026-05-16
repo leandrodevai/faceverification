@@ -1,11 +1,14 @@
 """Application service functions for face enrollment and verification."""
 
+import logging
+
 from PIL import Image
 
 from faceverification.core.image_processor import FaceNotDetectedError, ImageProcessor
 from faceverification.core.vectordb import VectorDB
 
 UNREGISTERED_PERSON = "Unregistered Person"
+logger = logging.getLogger(__name__)
 
 image_processor = ImageProcessor()
 
@@ -27,9 +30,17 @@ def add_person(image: Image.Image, name: str) -> Image.Image:
         TypeError: If embedding extraction returns an unexpected value.
     """
 
+    logger.debug(
+        "face_enrollment_started",
+        extra={"extra_fields": {"event": "face_enrollment_started", "name_length": len(name)}},
+    )
     img, presence = image_processor.detect_faces(image)
 
     if not presence:
+        logger.debug(
+            "face_enrollment_no_face",
+            extra={"extra_fields": {"event": "face_enrollment_no_face"}},
+        )
         raise FaceNotDetectedError("No faces were detected in the image.")
 
     faces_pt = image_processor.get_embedding(img)
@@ -37,6 +48,10 @@ def add_person(image: Image.Image, name: str) -> Image.Image:
         raise TypeError("The extracted face embedding is not a torch.Tensor.")
 
     vector_db.add_embedding(faces_pt.cpu().numpy(), {"name": name})
+    logger.debug(
+        "face_enrollment_completed",
+        extra={"extra_fields": {"event": "face_enrollment_completed"}},
+    )
 
     return img
 
@@ -54,18 +69,46 @@ def verify_person(image: Image.Image) -> tuple[str, Image.Image]:
         FaceNotDetectedError: If no face is detected.
         ValueError: If the vector database has no stored embeddings.
     """
+    logger.debug(
+        "face_verification_started",
+        extra={"extra_fields": {"event": "face_verification_started"}},
+    )
     detected_faces, presence = image_processor.detect_faces(image.copy())
 
     if not presence:
+        logger.debug(
+            "face_verification_no_face",
+            extra={"extra_fields": {"event": "face_verification_no_face"}},
+        )
         raise FaceNotDetectedError("No faces were detected in the image.")
 
     faces_pt = image_processor.get_embedding(image)
     if faces_pt is None:
         raise FaceNotDetectedError("No faces were detected in the image.")
 
-    metadata, _ = vector_db.query_embedding(faces_pt.cpu().numpy())
+    metadata, distance = vector_db.query_embedding(faces_pt.cpu().numpy())
 
     if metadata:
+        logger.debug(
+            "face_verification_completed",
+            extra={
+                "extra_fields": {
+                    "event": "face_verification_completed",
+                    "matched": True,
+                    "distance": distance,
+                }
+            },
+        )
         return metadata["name"], detected_faces
 
+    logger.debug(
+        "face_verification_completed",
+        extra={
+            "extra_fields": {
+                "event": "face_verification_completed",
+                "matched": False,
+                "distance": distance,
+            }
+        },
+    )
     return UNREGISTERED_PERSON, detected_faces

@@ -49,14 +49,14 @@ Using uv:
 
 ```bash
 uv sync
-uv run python app.py
+uv run faceverification
 ```
 
 Using pip:
 
 ```bash
-pip install -r requirements.txt
-python app.py
+pip install -r requirements.txt -e .
+python -m faceverification.interfaces.gradio_app
 ```
 
 ## FastAPI Interface
@@ -65,7 +65,7 @@ The project includes an HTTP API for the same enroll-and-verify workflow.
 Run it locally with:
 
 ```bash
-uv run uvicorn faceverification.interfaces.fastapi_app:app --host 0.0.0.0 --port 8000
+uv run uvicorn faceverification.interfaces.fastapi_app:app --port 8000
 ```
 
 Interactive API documentation is available at:
@@ -86,7 +86,14 @@ FACEVERIFICATION_DEMO_PASSWORD=demo123
 FACEVERIFICATION_JWT_SECRET_KEY=replace-this-with-a-long-random-secret
 FACEVERIFICATION_JWT_ACCESS_TOKEN_EXPIRE_MINUTES=60
 FACEVERIFICATION_MAX_UPLOAD_BYTES=5242880
+FACEVERIFICATION_DEBUG=false
+FACEVERIFICATION_LOG_FORMAT=json
 ```
+
+`FACEVERIFICATION_DEBUG=true` raises application logging to debug level and uses
+a readable text formatter by default, which is useful for local troubleshooting.
+Keep it `false` in normal deployments; Container Apps sends stdout logs to Log
+Analytics, where the default JSON format is easier to query.
 
 ```bash
 curl -X POST http://localhost:8000/auth/login \
@@ -194,6 +201,11 @@ unless `FACEVERIFICATION_VECTOR_DB_PERSIST_DIRECTORY` is explicitly provided.
 
 The default container configuration sets `FACEVERIFICATION_DEVICE=cpu` to keep
 deployment portable.
+
+Local Docker Compose defaults `FACEVERIFICATION_DEBUG=true` and
+`FACEVERIFICATION_LOG_FORMAT=text` for developer ergonomics. Azure Container
+Apps sets `FACEVERIFICATION_DEBUG=false` and `FACEVERIFICATION_LOG_FORMAT=json`
+for lower-volume structured logs in Log Analytics.
 
 The shared local ChromaDB volume is intended for a small demo deployment when a
 persist name is enabled. For a multi-container production setup with concurrent

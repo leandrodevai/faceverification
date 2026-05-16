@@ -1,5 +1,6 @@
 """Face detection and FaceNet embedding utilities."""
 
+import logging
 from collections.abc import Sequence
 
 import torch
@@ -8,6 +9,8 @@ from facenet_pytorch import MTCNN, InceptionResnetV1
 from PIL import Image, ImageDraw
 
 from faceverification.config import settings
+
+logger = logging.getLogger(__name__)
 
 
 class FaceNotDetectedError(ValueError):
@@ -49,6 +52,17 @@ class ImageProcessor:
             thresholds=list(mtcnn_thresholds),
         )
         self.facenet = InceptionResnetV1(pretrained=facenet_pretrained).eval().to(self.device)
+        logger.info(
+            "image_processor_initialized",
+            extra={
+                "extra_fields": {
+                    "event": "image_processor_initialized",
+                    "device": self.device,
+                    "mtcnn_thresholds": list(mtcnn_thresholds),
+                    "facenet_pretrained": facenet_pretrained,
+                }
+            },
+        )
 
     def get_embedding(self, image: Image.Image) -> torch.Tensor:
         """Return a normalized FaceNet embedding for the detected face.
@@ -64,6 +78,10 @@ class ImageProcessor:
         """
         face_tensor = self.mtcnn(image)
         if face_tensor is None:
+            logger.debug(
+                "face_embedding_no_face",
+                extra={"extra_fields": {"event": "face_embedding_no_face"}},
+            )
             raise FaceNotDetectedError("No face detected in the image.")
 
         face_tensor = (face_tensor.unsqueeze(0) if face_tensor.ndim == 3 else face_tensor).to(
@@ -74,6 +92,16 @@ class ImageProcessor:
             features = self.facenet(face_tensor)
             features = F.normalize(features, p=2, dim=1)
 
+        logger.debug(
+            "face_embedding_created",
+            extra={
+                "extra_fields": {
+                    "event": "face_embedding_created",
+                    "shape": list(features.shape),
+                    "device": self.device,
+                }
+            },
+        )
         return features.squeeze(0)
 
     def detect_faces(self, image: Image.Image) -> tuple[Image.Image, bool]:
@@ -88,7 +116,24 @@ class ImageProcessor:
         boxes, probs = self.mtcnn.detect(image)
 
         if boxes is None:
+            logger.debug(
+                "face_detection_completed",
+                extra={"extra_fields": {"event": "face_detection_completed", "face_count": 0}},
+            )
             return image, False
+
+        probabilities = [float(prob) for prob in probs]
+        logger.debug(
+            "face_detection_completed",
+            extra={
+                "extra_fields": {
+                    "event": "face_detection_completed",
+                    "face_count": len(boxes),
+                    "min_probability": min(probabilities),
+                    "max_probability": max(probabilities),
+                }
+            },
+        )
 
         draw = ImageDraw.Draw(image)
         for box, prob in zip(boxes, probs, strict=True):

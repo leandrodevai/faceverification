@@ -1,5 +1,6 @@
 """Small ChromaDB adapter for face embedding storage and lookup."""
 
+import logging
 import uuid
 from collections.abc import Mapping
 from typing import Any
@@ -9,6 +10,8 @@ import numpy as np
 from chromadb.config import Settings as ChromaSettings
 
 from faceverification.config import settings
+
+logger = logging.getLogger(__name__)
 
 
 class VectorDB:
@@ -43,6 +46,17 @@ class VectorDB:
         self.collection = self.client.get_or_create_collection(
             name=name_collection, metadata={"hnsw:space": distance_metric}
         )
+        logger.info(
+            "vector_db_initialized",
+            extra={
+                "extra_fields": {
+                    "event": "vector_db_initialized",
+                    "collection": name_collection,
+                    "distance_metric": distance_metric,
+                    "persistent": bool(persist_directory),
+                }
+            },
+        )
 
     def add_embedding(self, embedding: np.ndarray, metadata: Mapping[str, Any]) -> None:
         """Store one embedding with its metadata.
@@ -55,6 +69,16 @@ class VectorDB:
             embeddings=[embedding],
             metadatas=[metadata],
             ids=[str(uuid.uuid4())],
+        )
+        logger.debug(
+            "vector_db_embedding_added",
+            extra={
+                "extra_fields": {
+                    "event": "vector_db_embedding_added",
+                    "embedding_shape": list(embedding.shape),
+                    "metadata_keys": sorted(metadata.keys()),
+                }
+            },
         )
 
     def query_embedding(
@@ -79,6 +103,17 @@ class VectorDB:
         if n_results is None:
             n_results = settings.vector_db_n_results
 
+        logger.debug(
+            "vector_db_query_started",
+            extra={
+                "extra_fields": {
+                    "event": "vector_db_query_started",
+                    "threshold": threshold,
+                    "n_results": n_results,
+                    "embedding_shape": list(embedding.shape),
+                }
+            },
+        )
         result = self.collection.query(
             query_embeddings=[embedding],
             include=["metadatas", "distances", "embeddings"],
@@ -86,6 +121,10 @@ class VectorDB:
         )
         embeddings = result.get("embeddings")
         if not embeddings or embeddings[0] is None or len(embeddings[0]) == 0:
+            logger.warning(
+                "vector_db_query_empty",
+                extra={"extra_fields": {"event": "vector_db_query_empty"}},
+            )
             raise ValueError(
                 "No record found in the vector database. Add a person before verifying faces."
             )
@@ -98,7 +137,21 @@ class VectorDB:
                 best_dist = dist
                 best_idx = i
 
-        if best_dist <= threshold:
+        matched = best_dist <= threshold
+        logger.debug(
+            "vector_db_query_completed",
+            extra={
+                "extra_fields": {
+                    "event": "vector_db_query_completed",
+                    "matched": matched,
+                    "best_distance": float(best_dist),
+                    "threshold": threshold,
+                    "candidate_count": len(result["embeddings"][0]),
+                }
+            },
+        )
+
+        if matched:
             return result["metadatas"][0][best_idx], best_dist
         else:
             return None, best_dist
