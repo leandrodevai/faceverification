@@ -45,8 +45,7 @@ def _build_handler() -> logging.Handler:
 
     if settings.log_format == "text":
         formatter = logging.Formatter(
-            "%(asctime)s %(levelname)s [%(name)s] "
-            "request_id=%(request_id)s %(message)s"
+            "%(asctime)s %(levelname)s [%(name)s] request_id=%(request_id)s %(message)s"
         )
     else:
         formatter = JsonFormatter()

@@ -1,4 +1,5 @@
 from functools import cache
+from os import getenv
 
 import gradio as gr
 from PIL import Image
@@ -181,7 +182,8 @@ If a face is detected, the annotated image confirms what face was stored.
 
 def main():
     FV_gr.launch(
-        server_port=7860,
+        server_name=getenv("GRADIO_SERVER_NAME") or None,
+        server_port=int(getenv("GRADIO_SERVER_PORT", "7860")),
         theme=APP_THEME,
         css=APP_CSS,
     )

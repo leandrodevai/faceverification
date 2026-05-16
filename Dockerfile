@@ -32,4 +32,6 @@ FROM app AS fastapi
 CMD ["uvicorn", "faceverification.interfaces.fastapi_app:app", "--host", "0.0.0.0", "--port", "8000"]
 
 FROM app AS gradio
+ENV GRADIO_SERVER_NAME=0.0.0.0 \
+    GRADIO_SERVER_PORT=7860
 CMD ["python", "-m", "faceverification.interfaces.gradio_app"]
