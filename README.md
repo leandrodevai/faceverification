@@ -23,6 +23,18 @@ Try it on Hugging Face Spaces: https://huggingface.co/spaces/leandrodevai/faceve
 
 The app lets users add known people to a local embeddings database and verify whether a new face image matches one of the stored identities.
 
+![Face verification demo](images/faceverification_demo.gif)
+
+This demo was built to show that FaceNet, despite being an older architecture,
+is still a strong and practical baseline for face embedding workflows. Its
+moderate runtime footprint also makes it an interesting candidate for constrained
+deployments, including edge-style scenarios when hardware, latency, and accuracy
+requirements are compatible.
+
+The project is also intended as a reusable AI engineering template: the same
+structure can be adapted to build CI/CD pipelines for other models, or extended
+from image uploads into a video pipeline for near real-time face recognition.
+
 ## Features
 
 - Face detection and preprocessing from uploaded images
@@ -31,6 +43,47 @@ The app lets users add known people to a local embeddings database and verify wh
 - Interactive Gradio UI with add-person and verify-identity flows
 - FastAPI interface for containerized API deployments
 - Docker-based Hugging Face Space deployment
+
+## Model Evaluation
+
+The verification threshold was calibrated with a small study on the
+`bitmind/lfw` dataset, a Hugging Face version of Labeled Faces in the Wild
+(LFW). The study builds same-person and different-person image pairs, splits
+them into calibration and held-out evaluation sets, and evaluates L2 distance
+between L2-normalized FaceNet embeddings.
+
+For this demo, the selected threshold is:
+
+```text
+same person if L2 distance <= 1.0764
+different person if L2 distance > 1.0764
+```
+
+This value was chosen on the calibration split because it maximized balanced
+accuracy while staying below the distance region where different-person pairs
+start to dominate. The held-out evaluation split contains 720 same-person and
+720 different-person pairs.
+
+![Evaluation distance distributions](images/Densities.png)
+
+Held-out evaluation results:
+
+| Metric | Value |
+| --- | ---: |
+| AUC-ROC | 0.9838 |
+| Accuracy | 0.9653 |
+| FAR | 0.0097 |
+| FRR | 0.0597 |
+| TPR | 0.9403 |
+| Calibrated threshold | 1.0764 |
+| Calibration EER threshold | 1.1857 |
+
+![Held-out evaluation ROC curve](images/ROC.png)
+
+![Held-out evaluation confusion matrix](images/confusion_matrix.png)
+
+These metrics are intended to justify the threshold for this demo dataset, not
+as a production biometric benchmark.
 
 ## Tech Stack
 
