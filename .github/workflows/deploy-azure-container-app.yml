@@ -65,10 +65,10 @@ jobs:
               jwtSecretKey="$JWT_SECRET_KEY"
             )
 
-            if [ -n "$GHCR_PULL_TOKEN" ]; then
+            if [ -n "${GHCR_PULL_TOKEN:-}" ]; then
               parameters+=(
-                registryUsername="$GHCR_PULL_USERNAME"
-                registryPassword="$GHCR_PULL_TOKEN"
+                registryUsername="${GHCR_PULL_USERNAME:-}"
+                registryPassword="${GHCR_PULL_TOKEN:-}"
               )
             fi
 
