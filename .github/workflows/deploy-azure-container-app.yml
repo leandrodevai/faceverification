@@ -1,0 +1,99 @@
+name: Deploy FastAPI to Azure Container Apps
+
+on:
+  workflow_run:
+    workflows: ["Container Build, Scan, and Publish"]
+    types:
+      - completed
+    branches:
+      - main
+  workflow_dispatch:
+
+env:
+  RESOURCE_GROUP: ${{ vars.AZURE_RESOURCE_GROUP }}
+  AZURE_LOCATION: ${{ vars.AZURE_LOCATION }}
+  CONTAINER_APP_NAME: faceverification-api
+  IMAGE: ghcr.io/${{ github.repository }}:fastapi
+
+jobs:
+  deploy:
+    name: Deploy ephemeral API
+    if: ${{ github.event_name == 'workflow_dispatch' || github.event.workflow_run.conclusion == 'success' }}
+    runs-on: ubuntu-latest
+    permissions:
+      contents: read
+      id-token: write
+    concurrency:
+      group: azure-container-app-deploy
+      cancel-in-progress: true
+
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v6
+        with:
+          ref: ${{ github.event.workflow_run.head_sha || github.ref }}
+
+      - name: Azure login
+        uses: azure/login@v2
+        with:
+          client-id: ${{ vars.AZURE_CLIENT_ID }}
+          tenant-id: ${{ vars.AZURE_TENANT_ID }}
+          subscription-id: ${{ vars.AZURE_SUBSCRIPTION_ID }}
+
+      - name: Deploy infrastructure and image
+        id: deploy
+        uses: azure/cli@v2
+        env:
+          DEMO_USERNAME: ${{ secrets.FACEVERIFICATION_DEMO_USERNAME }}
+          DEMO_PASSWORD: ${{ secrets.FACEVERIFICATION_DEMO_PASSWORD }}
+          JWT_SECRET_KEY: ${{ secrets.FACEVERIFICATION_JWT_SECRET_KEY }}
+          GHCR_PULL_USERNAME: ${{ secrets.GHCR_PULL_USERNAME }}
+          GHCR_PULL_TOKEN: ${{ secrets.GHCR_PULL_TOKEN }}
+        with:
+          inlineScript: |
+            set -euo pipefail
+
+            az group create \
+              --name "$RESOURCE_GROUP" \
+              --location "$AZURE_LOCATION"
+
+            deployment_output=$(az deployment group create \
+              --resource-group "$RESOURCE_GROUP" \
+              --template-file infra/bicep/main.bicep \
+              --parameters \
+                containerAppName="$CONTAINER_APP_NAME" \
+                image="$IMAGE" \
+                demoUsername="$DEMO_USERNAME" \
+                demoPassword="$DEMO_PASSWORD" \
+                jwtSecretKey="$JWT_SECRET_KEY" \
+                registryUsername="$GHCR_PULL_USERNAME" \
+                registryPassword="$GHCR_PULL_TOKEN" \
+              --query properties.outputs.appUrl.value \
+              --output tsv)
+
+            echo "app-url=$deployment_output" >> "$GITHUB_OUTPUT"
+
+      - name: Smoke test health endpoint
+        run: |
+          set -euo pipefail
+
+          app_url="${{ steps.deploy.outputs.app-url }}"
+          echo "Smoke testing $app_url/health"
+
+          for attempt in {1..30}; do
+            if curl --fail --show-error --silent --max-time 20 "$app_url/health"; then
+              echo
+              echo "Smoke test passed."
+              exit 0
+            fi
+
+            echo "Waiting for the API to become ready... attempt $attempt/30"
+            sleep 10
+          done
+
+          echo "Smoke test failed."
+          exit 1
+
+      - name: Show deployment URL
+        run: |
+          echo "FastAPI URL: ${{ steps.deploy.outputs.app-url }}"

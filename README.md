@@ -205,6 +205,55 @@ FACEVERIFICATION_DEMO_PASSWORD
 FACEVERIFICATION_JWT_SECRET_KEY
 ```
 
+### Azure Container Apps
+
+The FastAPI image can also be deployed as an ephemeral Azure Container App from
+the GHCR image published by the container workflow.
+
+The deployment is defined in `infra/bicep/main.bicep` and is wired to
+`.github/workflows/deploy-azure-container-app.yml`. The workflow:
+
+- creates or reuses the Azure resource group configured in GitHub repository
+  variables;
+- deploys a Log Analytics workspace, Container Apps environment, and FastAPI
+  Container App;
+- runs the published `ghcr.io/leandrodevai/faceverification:fastapi` image;
+- keeps the app ephemeral with no mounted volume or external vector database;
+- configures `minReplicas: 0` and `maxReplicas: 1`;
+- smoke tests `GET /health` after deployment.
+
+Required GitHub repository variables:
+
+```text
+AZURE_CLIENT_ID
+AZURE_LOCATION
+AZURE_RESOURCE_GROUP
+AZURE_TENANT_ID
+AZURE_SUBSCRIPTION_ID
+```
+
+Required GitHub repository secrets:
+
+```text
+FACEVERIFICATION_DEMO_USERNAME
+FACEVERIFICATION_DEMO_PASSWORD
+FACEVERIFICATION_JWT_SECRET_KEY
+```
+
+Optional GitHub repository secrets for private GHCR packages:
+
+```text
+GHCR_PULL_USERNAME
+GHCR_PULL_TOKEN
+```
+
+If the GHCR package is public, those optional secrets can be omitted. If it is
+private, `GHCR_PULL_TOKEN` must be a GitHub token with package read access.
+
+To avoid ongoing cost while keeping the OIDC and RBAC setup intact, remove the
+demo resources inside the configured resource group from Azure when they are no
+longer needed.
+
 Example enrollment request:
 
 ```bash
