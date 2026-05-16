@@ -568,16 +568,20 @@ dependencies = [
     { name = "pydantic" },
     { name = "pydantic-settings" },
     { name = "pyjwt" },
-    { name = "pytest" },
-    { name = "pytest-cov" },
     { name = "python-dotenv" },
     { name = "python-multipart" },
-    { name = "ruff" },
     { name = "torch", version = "2.12.0", source = { registry = "https://download.pytorch.org/whl/cpu" }, marker = "sys_platform == 'darwin'" },
     { name = "torch", version = "2.12.0+cpu", source = { registry = "https://download.pytorch.org/whl/cpu" }, marker = "sys_platform != 'darwin'" },
     { name = "torchvision", version = "0.27.0", source = { registry = "https://download.pytorch.org/whl/cpu" }, marker = "sys_platform == 'darwin'" },
     { name = "torchvision", version = "0.27.0+cpu", source = { registry = "https://download.pytorch.org/whl/cpu" }, marker = "sys_platform != 'darwin'" },
     { name = "uvicorn", extra = ["standard"] },
+]
+
+[package.dev-dependencies]
+dev = [
+    { name = "pytest" },
+    { name = "pytest-cov" },
+    { name = "ruff" },
 ]
 
 [package.metadata]
@@ -592,14 +596,18 @@ requires-dist = [
     { name = "pydantic", specifier = ">=2.11.10,<=2.12.5" },
     { name = "pydantic-settings", specifier = ">=2.14.1" },
     { name = "pyjwt", specifier = ">=2.10.1" },
-    { name = "pytest", specifier = ">=9.0.3" },
-    { name = "pytest-cov", specifier = ">=7.1.0" },
     { name = "python-dotenv", specifier = ">=1.2.2" },
     { name = "python-multipart", specifier = ">=0.0.28" },
-    { name = "ruff", specifier = ">=0.15.13" },
     { name = "torch", specifier = ">=2.12.0", index = "https://download.pytorch.org/whl/cpu" },
     { name = "torchvision", specifier = ">=0.27.0", index = "https://download.pytorch.org/whl/cpu" },
     { name = "uvicorn", extras = ["standard"], specifier = ">=0.46.0" },
+]
+
+[package.metadata.requires-dev]
+dev = [
+    { name = "pytest", specifier = ">=9.0.3" },
+    { name = "pytest-cov", specifier = ">=7.1.0" },
+    { name = "ruff", specifier = ">=0.15.13" },
 ]
 
 [[package]]

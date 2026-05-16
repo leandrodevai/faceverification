@@ -44,6 +44,24 @@ from image uploads into a video pipeline for near real-time face recognition.
 - FastAPI interface for containerized API deployments
 - Docker-based Hugging Face Space deployment
 
+## Architecture
+
+```mermaid
+flowchart LR
+    A[Upload] --> B[MTCNN]
+    B --> C[Crop]
+    C --> D[FaceNet]
+    D --> E[Normalize]
+    E --> F[ChromaDB]
+    F --> G[Threshold]
+    G --> H[Match]
+```
+
+Images are first passed through MTCNN for face detection and cropping. FaceNet
+then produces an embedding, which is L2-normalized before being stored or
+queried in ChromaDB. Verification compares the nearest stored embedding against
+the calibrated distance threshold.
+
 ## Model Evaluation
 
 The verification threshold was calibrated with a small study on the
